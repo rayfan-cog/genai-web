@@ -101,8 +101,10 @@ export const setChatTitle = async (id: string, createdDate: string, title: strin
         createdDate: createdDate,
       },
       UpdateExpression: 'set title = :title',
+      ConditionExpression: 'attribute_exists(chatId) AND begins_with(id, :userPrefix)',
       ExpressionAttributeValues: {
         ':title': title,
+        ':userPrefix': 'user#',
       },
       ReturnValues: 'ALL_NEW',
     }),
