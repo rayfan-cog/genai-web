@@ -292,18 +292,25 @@ export class Auth extends Construct {
         ...(props.allowedIpV6AddressRanges ? props.allowedIpV6AddressRanges : []),
       ];
 
-      authenticatedRole.addToPolicy(
-        new PolicyStatement({
-          effect: Effect.DENY,
-          resources: ['*'],
-          actions: ['*'],
-          conditions: {
-            NotIpAddress: {
-              'aws:SourceIp': ipRanges,
+      for (const role of [
+        authenticatedRole,
+        this.systemAdminRole,
+        this.teamAdminRole,
+        this.userRole,
+      ]) {
+        role.addToPolicy(
+          new PolicyStatement({
+            effect: Effect.DENY,
+            resources: ['*'],
+            actions: ['*'],
+            conditions: {
+              NotIpAddress: {
+                'aws:SourceIp': ipRanges,
+              },
             },
-          },
-        }),
-      );
+          }),
+        );
+      }
     }
 
     // Lambda
