@@ -1,7 +1,8 @@
 import { PredictTitleRequest, UnrecordedMessage } from 'genai-web';
-import { setChatTitle } from './repository/chatRepository';
+import { findChatById, setChatTitle } from './repository/chatRepository';
 import api from './utils/api';
 import { createApiHandler } from './utils/createApiHandler';
+import { getUserId } from './utils/getUserId';
 import { HttpError } from './utils/httpError';
 import { defaultModel } from './utils/models';
 import { parseJsonBody } from './utils/parseJsonBody';
@@ -9,8 +10,16 @@ import { parseJsonBody } from './utils/parseJsonBody';
 export const handler = createApiHandler(async (event) => {
   const req = parseJsonBody(event.body) as PredictTitleRequest;
 
-  if (!req.prompt || !req.chat?.id || !req.chat?.createdDate || !req.id) {
+  if (!req.prompt || !req.chat?.chatId || !req.id) {
     throw new HttpError(400, 'リクエスト形式が不正です。');
+  }
+
+  const userId = getUserId(event);
+  const chatId = req.chat.chatId.replace(/^chat#/, '');
+  const chatItem = await findChatById(userId, chatId);
+
+  if (!chatItem) {
+    throw new HttpError(404, 'チャットが見つかりません。');
   }
 
   const model = defaultModel;
@@ -31,7 +40,7 @@ export const handler = createApiHandler(async (event) => {
       '$2',
     ) ?? '';
 
-  await setChatTitle(req.chat.id, req.chat.createdDate, title);
+  await setChatTitle(chatItem.id, chatItem.createdDate, title);
 
   return {
     statusCode: 200,
