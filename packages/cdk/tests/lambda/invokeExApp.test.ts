@@ -114,6 +114,7 @@ describe('invokeExApp Lambda handler', () => {
   const mockIdToken = 'mock-id-token';
   const mockValidatedEndpoint = {
     url: new URL(mockEndpoint),
+    addresses: [{ address: '93.184.215.14', family: 4 as const }],
   };
 
   const mockTeam = {

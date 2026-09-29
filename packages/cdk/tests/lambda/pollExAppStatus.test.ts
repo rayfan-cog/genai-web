@@ -61,6 +61,7 @@ describe('pollExAppStatus Lambda handler', () => {
   const mockApiKey = 'test-api-key';
   const mockValidatedStatusUrl = {
     url: new URL('https://api.example.com/status/12345'),
+    addresses: [{ address: '93.184.215.14', family: 4 as const }],
   };
 
   const createSqsRecord = (
