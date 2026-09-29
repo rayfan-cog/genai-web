@@ -5,6 +5,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkDirective from 'remark-directive';
 import remarkDirectiveRehype from 'remark-directive-rehype';
 import remarkGfm from 'remark-gfm';
+import { MarkdownImage } from '@/components/MarkdownImage';
 import { Disclosure, DisclosureSummary } from '@/components/ui/dads/Disclosure';
 import { ErrorText } from '@/components/ui/dads/ErrorText';
 import { Link } from '@/components/ui/dads/Link';
@@ -38,6 +39,7 @@ const components: CustomComponents = {
       return <Link href={props.href}>{props.children}</Link>;
     }
   },
+  img: MarkdownImage,
   code: (props: ComponentProps<'code'> & ExtraProps) => {
     const { node, className, children, ...rest } = props;
 

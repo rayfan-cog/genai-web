@@ -311,6 +311,7 @@ export class GenerativeAiUseCasesStack extends Stack {
         params.samlCognitoFederatedIdentityAdditionalProviderNames,
       // Backend
       apiEndpointUrl: api.api.url,
+      fileBucketRegionalDomainName: api.fileBucket.bucketRegionalDomainName,
       predictStreamFunctionArn: api.predictStreamFunction.functionArn,
       webAclId: props.webAclId,
       modelRegion: api.modelRegion,

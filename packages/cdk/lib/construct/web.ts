@@ -31,6 +31,7 @@ export interface WebProps {
   encryptionKey: kms.IKey;
   appEnv: string;
   apiEndpointUrl: string;
+  fileBucketRegionalDomainName: string;
   teamAccessControlApiEndpointUrl: string;
   userPoolId: string;
   userPoolClientId: string;
@@ -94,8 +95,7 @@ export class Web extends Construct {
       },
     };
 
-    const appCsp =
-      "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; connect-src 'self' https://*.amazonaws.com wss://*.amazonaws.com https://*.amazoncognito.com; font-src 'self' https://fonts.gstatic.com data:; object-src 'none'; frame-ancestors 'none';";
+    const appCsp = `default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://${props.fileBucketRegionalDomainName}; connect-src 'self' https://*.amazonaws.com wss://*.amazonaws.com https://*.amazoncognito.com; font-src 'self' https://fonts.gstatic.com data:; object-src 'none'; frame-ancestors 'none';`;
 
     const forbidden403Csp =
       "default-src 'none'; style-src https://fonts.googleapis.com; font-src https://fonts.gstatic.com; frame-ancestors 'none';";
