@@ -226,6 +226,49 @@ describe('bedrockApi S3 retrieve / latest-N filtering', () => {
     expect(videos[0].source.bytes).toBeUndefined();
   });
 
+  const s3Video = (data: string): UnrecordedMessage => ({
+    role: 'user',
+    content: 'v',
+    extraData: [{ type: 'video', name: 'movie.mp4', source: { type: 's3', mediaType: 'video/mp4', data } }],
+  });
+
+  test('他人の identityId を含む video の s3 URI は弾く（Bedrock に渡さない）', async () => {
+    const msg = s3Video(`s3://${BUCKET}/ap-northeast-1:another-user/uuid-v/movie.mp4`);
+    await expect(bedrockApi.invoke(MODEL, [msg], 'id', IDENTITY)).rejects.toThrow();
+    expect(bedrockMock.commandCalls(ConverseCommand).length).toBe(0);
+  });
+
+  test('bucket 名が不一致の video の s3 URI は弾く', async () => {
+    const msg = s3Video(`s3://other-bucket/${IDENTITY}/uuid-v/movie.mp4`);
+    await expect(bedrockApi.invoke(MODEL, [msg], 'id', IDENTITY)).rejects.toThrow();
+    expect(bedrockMock.commandCalls(ConverseCommand).length).toBe(0);
+  });
+
+  test('identityId 未指定で video の s3 ソースがあるとエラー（deny by default）', async () => {
+    const msg = s3Video(`s3://${BUCKET}/${IDENTITY}/uuid-v/movie.mp4`);
+    await expect(bedrockApi.invoke(MODEL, [msg], 'id', undefined)).rejects.toThrow();
+    expect(bedrockMock.commandCalls(ConverseCommand).length).toBe(0);
+  });
+
+  test('BUCKET_OWNER_ACCOUNT_ID があれば video の s3Location に bucketOwner を付与する', async () => {
+    const restoreOwner = mockEnvironment({ BUCKET_OWNER_ACCOUNT_ID: '123456789012' });
+    try {
+      await bedrockApi.invoke(
+        MODEL,
+        [s3Video(`s3://${BUCKET}/${IDENTITY}/uuid-v/movie.mp4`)],
+        'id',
+        IDENTITY,
+      );
+    } finally {
+      restoreOwner();
+    }
+    const videos = videoBlocks(getSentInput());
+    expect(videos[0].source.s3Location).toEqual({
+      uri: `s3://${BUCKET}/${IDENTITY}/uuid-v/movie.mp4`,
+      bucketOwner: '123456789012',
+    });
+  });
+
   test('video の base64 ソースは bytes に変換される（s3Location ではない）', async () => {
     const msg: UnrecordedMessage = {
       role: 'user',
