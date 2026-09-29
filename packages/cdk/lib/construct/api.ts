@@ -152,6 +152,7 @@ export class Api extends Construct {
         IMAGE_GENERATION_MODEL_IDS: JSON.stringify(imageGenerationModelIds),
         CROSS_ACCOUNT_BEDROCK_ROLE_ARN: crossAccountBedrockRoleArn ?? '',
         BUCKET_NAME: fileBucket.bucketName,
+        BUCKET_OWNER_ACCOUNT_ID: Stack.of(this).account,
         ...costConversionEnv,
         ...(props.guardrailIdentify ? { GUARDRAIL_IDENTIFIER: props.guardrailIdentify } : {}),
         ...(props.guardrailVersion ? { GUARDRAIL_VERSION: props.guardrailVersion } : {}),

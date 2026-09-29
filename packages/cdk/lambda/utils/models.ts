@@ -27,7 +27,7 @@ import {
 } from 'genai-web';
 import { toSafeDocumentName } from './fileNameUtils';
 import { authorizeOwnedKey } from './fileOwnership';
-import { FileRetrievalError, parseS3Uri } from './s3Uri';
+import { FileRetrievalError, type ParsedS3Uri, parseS3Uri } from './s3Uri';
 
 // Bedrock Converse の 1 リクエストあたりの上限。会話履歴をまたいで累積するため、
 // 送信時に新しい順で最新 N 件のみを残す（古い添付は LLM に渡らない）。
@@ -325,13 +325,9 @@ const selectRetainedExtraData = (messages: UnrecordedMessage[]): Set<ExtraData> 
   return retained;
 };
 
-// s3 ソースの image/file を S3 から取得して bytes（Buffer）化する。
-// bucket 名検証・所有者チェック・key デコードを行う。
+// s3 ソースの添付（image/file/video）について bucket 名検証・所有者チェック・key デコードを行う。
 // s3 ソースを処理する場合 identityId は必須（未指定ならエラー）。
-const fetchS3SourceBytes = async (
-  extra: ExtraData,
-  identityId: string | undefined,
-): Promise<Buffer> => {
+const authorizeS3Source = (extra: ExtraData, identityId: string | undefined): ParsedS3Uri => {
   const bucketName = process.env.BUCKET_NAME;
   if (!bucketName) {
     throw new FileRetrievalError('BUCKET_NAME is not configured');
@@ -358,9 +354,19 @@ const fetchS3SourceBytes = async (
     throw new FileRetrievalError(`Access denied for ${extra.name}`);
   }
 
+  return parsed;
+};
+
+// s3 ソースの image/file を S3 から取得して bytes（Buffer）化する。
+const fetchS3SourceBytes = async (
+  extra: ExtraData,
+  identityId: string | undefined,
+): Promise<Buffer> => {
+  const parsed = authorizeS3Source(extra, identityId);
+
   try {
     const response = await getS3Client().send(
-      new GetObjectCommand({ Bucket: bucketName, Key: parsed.key }),
+      new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
     );
     const byteArray = await response.Body?.transformToByteArray();
     if (!byteArray) {
@@ -467,10 +473,19 @@ export const createConverseCommandInput = async (
             },
           } as ContentBlock.VideoMember);
         } else if (extra.type === 'video' && extra.source.type === 's3') {
+          // video は Bedrock が S3 から直接読むため、Lambda ロール権限で他人の動画を
+          // 読ませないよう image/file と同じ検証を行い、検証済みの bucket/key から URI を再構築する。
+          const parsed = authorizeS3Source(extra, identityId);
+          const bucketOwner = process.env.BUCKET_OWNER_ACCOUNT_ID;
           contentBlocks.push({
             video: {
               format: extra.source.mediaType.split('/')[1],
-              source: { s3Location: { uri: extra.source.data } },
+              source: {
+                s3Location: {
+                  uri: `s3://${parsed.bucket}/${parsed.encodedKey}`,
+                  ...(bucketOwner ? { bucketOwner } : {}),
+                },
+              },
             },
           } as ContentBlock.VideoMember);
         }
