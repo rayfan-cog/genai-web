@@ -298,10 +298,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
     if (status === 'COMPLETED') {
       try {
+        const completedResponseBody = responseBody as { outputs?: unknown };
         const outputsStr =
-          typeof responseBody.outputs === 'string'
-            ? responseBody.outputs
-            : JSON.stringify(responseBody.outputs || {});
+          typeof completedResponseBody.outputs === 'string'
+            ? completedResponseBody.outputs
+            : JSON.stringify(completedResponseBody.outputs || {});
         const title = await predictExAppTitle(inputs, outputsStr);
         if (title) {
           await updateInvokeExAppHistoryTitle(dbId, createdDate, title);

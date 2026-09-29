@@ -1,3 +1,5 @@
+import { lookup } from 'node:dns/promises';
+import * as https from 'node:https';
 import ipaddr = require('ipaddr.js');
 
 const MAX_ENDPOINT_URL_LENGTH = 4096;
@@ -12,6 +14,12 @@ export class UnsafeExAppUrlError extends Error {
 
 export type ValidatedExAppUrl = {
   readonly url: URL;
+  readonly addresses: readonly ResolvedAddress[];
+};
+
+export type ResolvedAddress = {
+  readonly address: string;
+  readonly family: 4 | 6;
 };
 
 export type ExAppHttpRequestOptions = {
@@ -46,22 +54,50 @@ const hasControlCharacter = (value: string): boolean => {
   return false;
 };
 
-const assertAllowedHostname = (hostname: string): void => {
-  const normalizedHostname = trimTrailingDots(normalizeIpLiteral(hostname).toLowerCase());
+const normalizeHostname = (hostname: string): string =>
+  trimTrailingDots(normalizeIpLiteral(hostname).toLowerCase());
+
+const assertPublicAddress = (
+  address: string,
+  message = 'APIエンドポイントには公開 IP アドレスを指定してください。',
+): void => {
+  if (ipaddr.process(address).range() !== 'unicast') {
+    throw new UnsafeExAppUrlError(message);
+  }
+};
+
+const assertAllowedHostname = async (hostname: string): Promise<readonly ResolvedAddress[]> => {
+  const normalizedHostname = normalizeHostname(hostname);
   if (normalizedHostname.length === 0) {
     throw new UnsafeExAppUrlError('APIエンドポイントのホスト名を指定してください。');
   }
   if (normalizedHostname === 'localhost' || normalizedHostname.endsWith('.localhost')) {
     throw new UnsafeExAppUrlError('APIエンドポイントのホスト名は許可されていません。');
   }
-  if (!ipaddr.isValid(normalizedHostname)) {
-    return;
+  if (ipaddr.isValid(normalizedHostname)) {
+    assertPublicAddress(normalizedHostname);
+    const family = ipaddr.parse(normalizedHostname).kind() === 'ipv4' ? 4 : 6;
+    return [{ address: normalizedHostname, family }];
   }
 
-  const parsedAddress = ipaddr.process(normalizedHostname);
-  if (parsedAddress.range() !== 'unicast') {
-    throw new UnsafeExAppUrlError('APIエンドポイントには公開 IP アドレスを指定してください。');
+  let addresses: readonly ResolvedAddress[];
+  try {
+    addresses = (await lookup(normalizedHostname, { all: true, verbatim: true })).map(
+      ({ address, family }) => ({ address, family: family as 4 | 6 }),
+    );
+  } catch {
+    throw new UnsafeExAppUrlError('APIエンドポイントのホスト名を解決できません。');
   }
+  if (addresses.length === 0) {
+    throw new UnsafeExAppUrlError('APIエンドポイントのホスト名を解決できません。');
+  }
+  for (const { address } of addresses) {
+    assertPublicAddress(
+      address,
+      'APIエンドポイントには公開 IP アドレスに解決されるホスト名を指定してください。',
+    );
+  }
+  return addresses;
 };
 
 export const parseHttpsUrl = (value: string): URL => {
@@ -99,8 +135,8 @@ export const parseHttpsUrl = (value: string): URL => {
 
 export const assertPublicEndpointUrl = async (value: string): Promise<ValidatedExAppUrl> => {
   const url = parseHttpsUrl(value);
-  assertAllowedHostname(url.hostname);
-  return { url };
+  const addresses = await assertAllowedHostname(url.hostname);
+  return { url, addresses };
 };
 
 export const resolveRelativeStatusUrl = (
@@ -129,7 +165,7 @@ export const resolveRelativeStatusUrl = (
     throw new UnsafeExAppUrlError('ステータスURLにフラグメントは含められません。');
   }
 
-  return { url: resolvedUrl };
+  return { url: resolvedUrl, addresses: endpoint.addresses };
 };
 
 export const assertPublicStatusUrl = async (
@@ -149,14 +185,51 @@ export const requestValidatedExAppUrl = async (
   validatedUrl: ValidatedExAppUrl,
   options: ExAppHttpRequestOptions = {},
 ): Promise<ExAppHttpResponse> => {
-  const response = await fetch(validatedUrl.url, {
+  const req = https.request(validatedUrl.url, {
     method: options.method ?? 'GET',
     headers: options.headers ? { ...options.headers } : undefined,
-    body: options.body,
-    redirect: 'manual',
+    lookup: ((_hostname, lookupOptions, callback) => {
+      if (typeof lookupOptions === 'object' && lookupOptions.all) {
+        callback(
+          null,
+          validatedUrl.addresses.map(({ address, family }) => ({ address, family })),
+        );
+        return;
+      }
+      const { address, family } = validatedUrl.addresses[0];
+      callback(null, address, family);
+    }) as NonNullable<https.RequestOptions['lookup']>,
   });
-  if (response.status >= 300 && response.status < 400) {
-    throw new UnsafeExAppUrlError('AIアプリのリダイレクト応答は許可されていません。');
-  }
-  return response;
+  return new Promise((resolve, reject) => {
+    req.on('error', reject);
+    req.on('response', (response) => {
+      if (
+        response.statusCode !== undefined &&
+        response.statusCode >= 300 &&
+        response.statusCode < 400
+      ) {
+        response.destroy();
+        response.resume();
+        reject(new UnsafeExAppUrlError('AIアプリのリダイレクト応答は許可されていません。'));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer | string) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      response.on('error', reject);
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString();
+        const status = response.statusCode ?? 0;
+        resolve({
+          status,
+          ok: status >= 200 && status < 300,
+          text: async () => body,
+          json: async () => JSON.parse(body),
+        });
+      });
+    });
+    req.end(options.body);
+  });
 };

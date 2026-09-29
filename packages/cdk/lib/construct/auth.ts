@@ -68,6 +68,7 @@ export class Auth extends Construct {
       },
       passwordPolicy: props.passwordPolicy,
       autoVerify: { email: true },
+      keepOriginal: { email: true },
       // Custom Email Sender Lambda 利用時は、Cognito がコードを暗号化するための KMS キーを設定
       ...(props.customEmailSender ? { customSenderKmsKey: props.encryptionKey } : {}),
       // Email MFA 有効時は SES 構成が必須（CDK バリデーション要件）

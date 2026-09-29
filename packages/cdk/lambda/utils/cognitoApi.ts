@@ -34,22 +34,37 @@ export const findUserByEmail = async (
   email: string,
 ): Promise<{ userId: string; email: string } | undefined> => {
   const input: ListUsersCommandInput = {
-    AttributesToGet: ['email', 'sub'],
-    Filter: `email="${email}"`,
-    Limit: 1,
+    AttributesToGet: ['email', 'email_verified', 'sub'],
+    Filter: `email="${email.replace(/[\\"]/g, '\\$&')}"`,
+    Limit: 2,
     UserPoolId: userPoolId,
   };
 
   const response = await client.send(new ListUsersCommand(input));
+  const users = response.Users ?? [];
+  if (users.length > 1) {
+    return undefined;
+  }
 
-  return response.Users!.length > 0
-    ? {
-        userId: response.Users![0].Attributes!.filter((attribute) => attribute.Name === 'sub')[0]
-          .Value!,
-        email: response.Users![0].Attributes!.filter((attribute) => attribute.Name === 'email')[0]
-          .Value!,
-      }
-    : undefined;
+  const trustedUsers = users.filter((user) => {
+    const userEmail = user.Attributes?.find((attribute) => attribute.Name === 'email')?.Value;
+    const emailVerified =
+      user.Attributes?.find((attribute) => attribute.Name === 'email_verified')?.Value === 'true';
+    const trustedSource = emailVerified || user.UserStatus === 'EXTERNAL_PROVIDER';
+    return trustedSource && userEmail?.toLowerCase() === email.toLowerCase();
+  });
+  if (trustedUsers.length !== 1) {
+    return undefined;
+  }
+
+  const user = trustedUsers[0];
+  const userId = user.Attributes?.find((attribute) => attribute.Name === 'sub')?.Value;
+  const userEmail = user.Attributes?.find((attribute) => attribute.Name === 'email')?.Value;
+  if (!userId || !userEmail) {
+    return undefined;
+  }
+
+  return { userId, email: userEmail };
 };
 
 export const findUserById = async (

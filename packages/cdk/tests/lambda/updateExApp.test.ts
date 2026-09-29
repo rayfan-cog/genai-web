@@ -140,6 +140,7 @@ describe('updateExApp Lambda handler', () => {
     vi.resetAllMocks();
     mockedAssertPublicEndpointUrl.mockResolvedValue({
       url: new URL('https://api.example.com/updated'),
+      addresses: [{ address: '93.184.215.14', family: 4 }],
     });
     mockedFindExAppById.mockResolvedValue(createExistingExApp());
   });
@@ -265,6 +266,7 @@ describe('updateExApp Lambda handler', () => {
     mockedFindExAppById.mockResolvedValue(createExistingExApp('https://api.example.com'));
     mockedAssertPublicEndpointUrl.mockResolvedValue({
       url: new URL('https://api.example.com'),
+      addresses: [{ address: '93.184.215.14', family: 4 }],
     });
     mockedUpdateExApp.mockResolvedValue(createUpdatedExApp('https://api.example.com'));
 

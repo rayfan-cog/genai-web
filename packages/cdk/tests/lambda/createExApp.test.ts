@@ -97,6 +97,7 @@ describe('createExApp Lambda handler', () => {
     vi.resetAllMocks();
     mockedAssertPublicEndpointUrl.mockResolvedValue({
       url: new URL('https://api.example.com/test'),
+      addresses: [{ address: '93.184.215.14', family: 4 }],
     });
   });
 
