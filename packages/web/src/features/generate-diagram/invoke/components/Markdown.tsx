@@ -4,6 +4,7 @@ import { ExtraProps, default as ReactMarkdown } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { BundledLanguage, codeToHtml } from 'shiki';
+import { MarkdownImage } from '@/components/MarkdownImage';
 import { ButtonCopy } from '@/components/ui/ButtonCopy';
 import { ErrorText } from '@/components/ui/dads/ErrorText';
 import { Link } from '@/components/ui/dads/Link';
@@ -27,10 +28,6 @@ const LinkRenderer = (props: ComponentProps<'a'>) => {
     </Link>
   );
 };
-const ImageRenderer = (props: ComponentProps<'img'>) => {
-  return <img id={props.id} src={props.src} alt={props.alt} {...props} />;
-};
-
 type CodeBlockProps = {
   children: string;
   lang: BundledLanguage;
@@ -122,7 +119,7 @@ const CodeRenderer = ({ children }: ComponentProps<'code'>) => {
 
 const components: ComponentProps<typeof ReactMarkdown>['components'] = {
   a: LinkRenderer,
-  img: ImageRenderer,
+  img: MarkdownImage,
   sup: SupRenderer,
   code: CodeRenderer,
   pre: PreRenderer,
